@@ -24,6 +24,7 @@
 #include <heads/root/ConnectionRegisterer.hpp>
 #include <heads/root/HeadListener.hpp>
 #include <heads/root/HeadListeners.hpp>
+#include <heads/root/HeadListenersAccessor.hpp>
 #include <heads/root/HeadReduceService.hpp>
 #include <heads/root/Reducible.hpp>
 #include <heads/root/Reductions.hpp>
@@ -76,7 +77,12 @@ namespace root
 					}
 				});
 
-				listeners.add( headId, rod::create< HeadListener >( root, common::HeadId( headId ), std::move( connection ), reduceService ) );
+				listeners.add( headId, rod::create< HeadListener >(
+						root,
+						common::HeadId( headId ),
+						std::move( connection ),
+						reduceService,
+						HeadListenersAccessor< Root >( root ) ) );
 				listeners.get( headId ).listen();
 			}
 		};
@@ -138,7 +144,11 @@ namespace root
 	public:
 		using Listeners = root::HeadListeners<
 								typename rod::Bind< This, HeadListener >
-												::template Inject< common::HeadId, common::Connection, HeadReduceService< This >& >::r
+												::template Inject<
+													common::HeadId,
+													common::Connection,
+													HeadReduceService< This >&,
+													HeadListenersAccessor< This > >::r
 												::r >;
 		using Reductions = typename rootDetail::DefineReductions<
 										typename This::template FindRegisteredType<
@@ -153,6 +163,11 @@ namespace root
 
 	public:
 		ROD_Contextual_Constructor( Root );
+
+		Root( const Root& ) = delete;
+		Root( Root&& ) = delete;
+		Root& operator = ( const Root& ) = delete;
+		Root& operator = ( Root&& ) = delete;
 
 
 		Listeners&
@@ -179,6 +194,8 @@ namespace root
 			{
 				connectionPreRegister.preRegisterConnection( std::move( headReadSocket ) );
 			});
+
+			rootServer.listen();
 
 			app.exec();
 			QObject::disconnect( c );

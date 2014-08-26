@@ -90,6 +90,12 @@ namespace root
 			}
 		}
 
+		common::HeadId
+		getId()
+		{
+			return rod::resolve< common::HeadId& >( this );
+		}
+
 		ListenerStage
 		getStage() const
 		{

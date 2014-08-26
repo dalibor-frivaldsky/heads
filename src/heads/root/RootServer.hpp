@@ -37,6 +37,8 @@ namespace root
 
 		~RootServer();
 
+		void	listen();
+
 		QMetaObject::Connection	onHeadConnected( HeadConnectedCallback&& callback );
 	};
 

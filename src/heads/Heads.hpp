@@ -4,6 +4,8 @@
 #include <rod/Contextual.hpp>
 #include <rod/factory/FactoryResolver.hpp>
 
+#include <QCoreApplication>
+
 #include <heads/common/ServerNaming.hpp>
 #include <heads/common/Socket.hpp>
 #include <heads/head/Head.hpp>
@@ -28,17 +30,38 @@ namespace heads {
 		void
 		enter()
 		{
-			common::Socket	rootSocket = establishRootConnection();
-
-			if( rootSocket->state() == QLocalSocket::UnconnectedState )
+			if( QCoreApplication::arguments().contains( "-heads:root" ) )
 			{
-				rod::create< root::Root >( this ).enter();
+				auto r = rod::create< root::Root >( this );
+				r.enter();
 			}
 			else
 			{
-				auto head = rod::create< head::Head >( this );
-				head.setRootSocket( std::move( rootSocket ) );
-				head.enter();
+				common::Socket	rootSocket = establishRootConnection();
+
+				if( rootSocket->state() == QLocalSocket::UnconnectedState )
+				{
+					QProcess::startDetached(
+						QCoreApplication::arguments()[ 0 ],
+						QStringList() << "-heads:root" );
+				}
+
+				while( rootSocket->state() != QLocalSocket::ConnectedState )
+				{
+					if( rootSocket->state() == QLocalSocket::UnconnectedState )
+					{
+						rootSocket->connectToServer( rod::resolve< common::ServerNaming& >( this ).rootName(), QIODevice::WriteOnly );
+					}
+					
+					QThread::msleep( 200 );
+				}
+
+				if( rootSocket->state() == QLocalSocket::ConnectedState )
+				{
+					auto head = rod::create< head::Head >( this );
+					head.setRootSocket( std::move( rootSocket ) );
+					head.enter();
+				}
 			}
 		}
 

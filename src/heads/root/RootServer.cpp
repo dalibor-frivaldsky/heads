@@ -12,14 +12,18 @@ namespace root
 
 	RootServer::RootServer( common::ServerNaming& serverNaming ):
 	  serverNaming( serverNaming )
-	{
-		rootServer.listen( serverNaming.rootName() );
-	}
+	{}
 
 	RootServer::~RootServer()
 	{
 		rootServer.close();
 		QLocalServer::removeServer( serverNaming.rootName() );
+	}
+
+	void
+	RootServer::listen()
+	{
+		rootServer.listen( serverNaming.rootName() );
 	}
 
 	QMetaObject::Connection

@@ -17,7 +17,10 @@ SOURCES += $$PWD/src/heads/Bootstrapper.cpp \
 	$$PWD/src/heads/root/RootServer.cpp \
 	$$PWD/src/heads/root/UnpairedSockets.cpp
 
-HEADERS += $$PWD/src/heads/Bootstrapper.hpp \
+HEADERS += $$PWD/src/heads/root/annotation/ListenersAccessor.hpp \
+	$$PWD/src/heads/root/HeadListenersAccessor.hpp \
+	$$PWD/src/heads/InformOthers.hpp \
+	$$PWD/src/heads/Bootstrapper.hpp \
 	$$PWD/src/heads/Heads.hpp \
 	$$PWD/src/heads/Inform.hpp \
 	$$PWD/src/heads/MessageControllers.hpp \
