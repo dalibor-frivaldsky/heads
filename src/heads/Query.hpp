@@ -1,19 +1,20 @@
 #pragma once
 
 
-#include <functional>
+#include <utility>
 
-#include <rod/With.hpp>
+#include <rod/Find.hpp>
+#include <rod/Resolve.hpp>
+#include <rod/match/Annotation.hpp>
+#include <rod/match/Component.hpp>
+
 #include <rod/factory/Factory.hpp>
 
 #include <QString>
 
 #include <heads/Topic.hpp>
-#include <heads/common/Connection.hpp>
 #include <heads/common/Message.hpp>
-#include <heads/common/Request.hpp>
-#include <heads/common/RequestPool.hpp>
-#include <heads/common/Response.hpp>
+#include <heads/common/annotation/QueryProvider.hpp>
 
 
 
@@ -21,39 +22,19 @@
 namespace heads
 {
 
-	namespace queryDetail
-	{
-
-		// TODO move to rod
-		template< typename LambdaOp >
-		struct GetQueryReturn;
-
-		template< typename Class, typename Return, typename QueryReturn >
-		struct GetQueryReturn< Return (Class::*)( QueryReturn ) const >
-		{
-			using r = QueryReturn;
-		};
-
-	}
-
-
-	template< typename Context, typename Lambda >
+	template< typename Context, typename Closure >
 	void
-	query( Context* context, common::Message message, Lambda&& lambda )
+	query( Context& context, common::Message message, Closure&& closure )
 	{
-		rod::with( context,
-		[=] ( rod::factory::Factory< common::Request > requestFactory, common::RequestPool& requestPool )
-		{
-			common::Request	r = requestFactory.create();
+		using QueryProvider =	typename rod::Find<
+									Context,
+									rod::match::Component<
+										rod::match::Annotation< common::annotation::IsQueryProvider >
+									>
+								>::r::Head::r;
+		auto& queryProvider = rod::resolve< QueryProvider& >( context );
 
-			r.setMessage( std::move( message ) );
-			r.withResponse(
-			[=] ( common::Response response )
-			{
-				lambda( response.to< typename queryDetail::GetQueryReturn< decltype( &Lambda::operator () ) >::r >() );
-			});
-			requestPool.add( std::move( r ) );
-		});
+		queryProvider.query( message, std::move( closure ) );
 	}
 
 }

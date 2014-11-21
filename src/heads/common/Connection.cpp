@@ -3,6 +3,8 @@
 
 #include <utility>
 
+#include <heads/common/ProtocolWriter.hpp>
+
 
 
 
@@ -10,23 +12,36 @@ namespace heads {
 namespace common
 {
 
-	Connection::Connection()
+	Connection::Connection():
+	  QObject()
 	{}
 
 	Connection::Connection( Socket readSocket, Socket writeSocket, ProtocolReader protocolReader ):
+	  QObject(),
 	  readSocket( std::move( readSocket ) ),
 	  writeSocket( std::move( writeSocket ) ),
 	  protocolReader( std::move( protocolReader ) )
 	{}
 
 	Connection::Connection( Connection&& other ):
+	  QObject(),
 	  readSocket( std::move( other.readSocket ) ),
 	  writeSocket( std::move( other.writeSocket ) ),
 	  protocolReader( std::move( other.protocolReader ) )
 	{}
 
 	Connection::~Connection()
-	{}
+	{
+		if( readSocket && readSocket->isValid() )
+		{
+			readSocket->close();
+		}
+
+		if( writeSocket )
+		{
+			writeSocket->close();
+		}
+	}
 
 	const Socket&
 	Connection::getReadSocket() const
@@ -38,6 +53,9 @@ namespace common
 	Connection::setReadSocket( Socket&& readSocket )
 	{
 		this->readSocket = std::move( readSocket );
+
+		QObject::connect( this->readSocket.get(), &QIODevice::readyRead,
+						  this, &Connection::onReadyRead );
 	}
 
 	const Socket&
@@ -52,10 +70,23 @@ namespace common
 		this->writeSocket = std::move( writeSocket );
 	}
 
-	ProtocolReader&
-	Connection::getProtocolReader()
+	void
+	Connection::sendMessage( const Message& message )
 	{
-		return protocolReader;
+		ProtocolWriter::write( *writeSocket, message );
+	}
+
+	void
+	Connection::onReadyRead()
+	{
+		protocolReader.readFrom( *readSocket );
+
+		while( protocolReader.availableMessages() )
+		{
+			common::Message	message( protocolReader.get() );
+
+			emit messageReceived( message );
+		}
 	}
 
 }}

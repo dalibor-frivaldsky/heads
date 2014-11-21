@@ -3,19 +3,28 @@
 
 #include <utility>
 
-#include <rod/AsContextual.hpp>
-#include <rod/Contextual.hpp>
+#include <rod/Extend.hpp>
+#include <rod/Find.hpp>
+#include <rod/Injected.hpp>
+#include <rod/Singleton.hpp>
+#include <rod/match/Annotation.hpp>
+#include <rod/match/Component.hpp>
 
 #include <QMetaObject>
+#include <QObject>
 
 #include <heads/MessageControllers.hpp>
 #include <heads/annotation/RootDescriptor.hpp>
 #include <heads/common/Connection.hpp>
+#include <heads/common/HeadId.hpp>
 #include <heads/common/Message.hpp>
 #include <heads/common/MessageDispatcher.hpp>
 #include <heads/common/QueryId.hpp>
+#include <heads/common/QueryIdProvider.hpp>
+#include <heads/common/QueryService.hpp>
 #include <heads/common/RequestPool.hpp>
-#include <heads/root/annotation/ReduceService.hpp>
+#include <heads/root/HeadReduceService.hpp>
+#include <heads/root/annotation/ReductionPool.hpp>
 
 
 
@@ -24,15 +33,17 @@ namespace heads {
 namespace root
 {
 
-	namespace headListenerDetail
+	namespace detail
 	{
 
 		template< typename Context >
-		struct DefineContextual
+		struct DefineListenerContext
 		{
 		private:
-			using RootDescriptor = typename Context::template FindRegisteredType<
-										::heads::annotation::IsRootDescriptor >::r::Head::r;
+			using RootDescriptor = typename rod::Find<
+										Context,
+										rod::match::Annotation< ::heads::annotation::IsRootDescriptor >
+									>::r::Head::r;
 
 			template< typename MessageControllers >
 			struct Define;
@@ -40,9 +51,11 @@ namespace root
 			template< typename... MessageController >
 			struct Define< MessageControllers< MessageController... > >
 			{
-				using r = rod::Contextual<
-					Context,
-					MessageController... >;
+				using r = typename rod::Extend< Context >
+							::template With<
+								MessageController...,
+								rod::Injected< common::Connection& >,
+								rod::Injected< common::HeadId > >::r;
 			};
 
 		public:
@@ -60,34 +73,58 @@ namespace root
 	};
 
 	template< typename Context >
-	class HeadListener:
-		public headListenerDetail::DefineContextual< Context >::r
+	class HeadListener
 	{
 	private:
-		using This = HeadListener< Context >;
+		typename detail::DefineListenerContext< Context >::r		listenerContext;
+
+		HeadReduceService< decltype( listenerContext ) >	headReduceService;
+		common::QueryService< decltype( listenerContext ) >		queryService;
+		typename rod::Extend< decltype( listenerContext ) >
+			::template With<
+				rod::Injected< decltype( headReduceService )& >,
+				rod::Injected< decltype( queryService )& > >::r	listenerContextWithServices;
+
 
 		ListenerStage				stage = ListenerStage::Initializing;
-		QMetaObject::Connection		readyReadConnection;
+		QMetaObject::Connection		onMessageReceivedConnection;
 
-		common::Connection&		connection = ROD_Resolve( common::Connection& );
+		common::Connection&		connection;
 
 
 	public:
-		ROD_Contextual_Constructor( HeadListener );
+		HeadListener( Context& context, common::Connection& connection, common::HeadId headId ):
+		  listenerContext( context, connection, std::move( headId ) ),
+		  headReduceService( listenerContext ),
+		  queryService( listenerContext ),
+		  listenerContextWithServices( listenerContext, headReduceService, queryService ),
+		  connection( connection )
+		{
+			listen();
+		}
 
-		HeadListener( This&& other ):
-		  This::ContextualBase( std::move( other ) ),
-		  connection( rod::resolve< common::Connection& >( this ) ),
+		HeadListener( const HeadListener< Context >& ) = delete;
+
+		HeadListener( HeadListener< Context >&& other ):
+		  listenerContext( std::move( other.listenerContext ) ),
+		  headReduceService( listenerContext ),
+		  queryService( listenerContext ),
+		  listenerContextWithServices( listenerContext, headReduceService, queryService ),
 		  stage( other.stage ),
-		  readyReadConnection( std::move( other.readyReadConnection ) )
-		{}
+		  connection( other.connection )
+		{
+			listen();
+		}
 
 		~HeadListener()
 		{
-			if( readyReadConnection )
-			{
-				QObject::disconnect( readyReadConnection );
-			}
+			QObject::disconnect( onMessageReceivedConnection );
+		}
+
+		decltype(listenerContextWithServices)&
+		getContext()
+		{
+			return listenerContextWithServices;
 		}
 
 		common::HeadId
@@ -105,28 +142,31 @@ namespace root
 		void
 		listen()
 		{
-			using ReduceService = typename This::template FindRegisteredType< annotation::IsReduceService >::r::Head::r;
-
-			readyReadConnection = QObject::connect( connection.getReadSocket().get(), &QIODevice::readyRead,
-			[this] ()
+			onMessageReceivedConnection = QObject::connect( &connection, &common::Connection::messageReceived,
+			[this] ( const common::Message& message )
 			{
-				connection.getProtocolReader().readFrom( *connection.getReadSocket() );
+				using	ReductionPool =	rod::Find<
+											Context,
+											rod::match::Component<
+												rod::match::Annotation< root::annotation::IsReductionPool >
+											>
+										>::r::Head::r;
 
-				while( connection.getProtocolReader().availableMessages() )
-				{
-					common::Message	m( connection.getProtocolReader().get() );
-					auto			dispatcher = common::messageDispatcher( this );
+				auto	dispatcher = common::CreateMessageDispatcher<
+										decltype( listenerContext ) >::r();
 				
-					if( m.type.isEmpty() )
-					{
-						rod::resolve< common::RequestPool& >( this ).processMessage( std::move( m ) );
-						rod::resolve< ReduceService& >( this ).checkReductions();
-					}
-					else
-					{
-						common::QueryId	id { m.id };
-						dispatcher.dispatch( m.type, std::move( m ), std::move( id ) );
-					}
+				if( message.type.isEmpty() )
+				{
+					rod::resolve< common::RequestPool& >( listenerContext ).processMessage( message );
+					rod::resolve< ReductionPool& >( listenerContext ).check();
+				}
+				else
+				{
+					dispatcher.dispatch(
+						message.type,
+						listenerContextWithServices,
+						message,
+						common::QueryId { message.id } );
 				}
 			});
 
@@ -136,7 +176,7 @@ namespace root
 		void
 		goDown()
 		{
-			QObject::disconnect( readyReadConnection );
+			QObject::disconnect( onMessageReceivedConnection );
 			stage = ListenerStage::Down;
 		}
 	};

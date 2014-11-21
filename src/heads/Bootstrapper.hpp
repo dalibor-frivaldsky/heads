@@ -1,7 +1,9 @@
 #pragma once
 
 
-#include <QEventLoop>
+#include <rod/annotation/Requires.hpp>
+
+#include <heads/head/StageControl.hpp>
 
 
 
@@ -12,20 +14,17 @@ namespace heads
 	class Bootstrapper
 	{
 	private:
-		QEventLoop&		eventLoop;
-		bool			proceedToLogic = false;
+		head::StageControl< bool >&	stageControl;
 
 
 	public:
-		Bootstrapper( QEventLoop& eventLoop );
-		Bootstrapper( const Bootstrapper& ) = delete;
-		Bootstrapper( Bootstrapper&& other ) = delete;
+		using Requires = rod::annotation::Requires< head::StageControl< bool >& >;
+
+		Bootstrapper( head::StageControl< bool >& stageControl );
 
 
 		void	proceed();
 		void	quit();
-
-		bool	shouldProceed() const;
 	};
 
 }

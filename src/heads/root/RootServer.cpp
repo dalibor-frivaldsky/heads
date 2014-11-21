@@ -29,7 +29,8 @@ namespace root
 	QMetaObject::Connection
 	RootServer::onHeadConnected( HeadConnectedCallback&& callback )
 	{
-		return QObject::connect( &rootServer, &QLocalServer::newConnection, [=] ()
+		return QObject::connect( &rootServer, &QLocalServer::newConnection,
+		[=] ()
 		{
 			callback( common::Socket( rootServer.nextPendingConnection() ) );
 		});

@@ -15,15 +15,15 @@ namespace heads {
 
 	template< typename Context, typename ReplyContent >
 	void
-	reply( Context* context, ReplyContent&& replyContent )
+	reply( Context& context, ReplyContent&& replyContent )
 	{
 		rod::with( context,
 		[&] ( common::Connection& connection, common::QueryId& queryId )
 		{
-			common::Message	m( "", queryId.id );
-			m.writeContent( replyContent );
+			common::Message	message( "", queryId.id );
+			message.writeContent( replyContent );
 
-			common::ProtocolWriter::write( *connection.getWriteSocket(), m );
+			connection.sendMessage( message );
 		});
 	}
 

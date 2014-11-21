@@ -3,13 +3,14 @@
 
 #include <utility>
 
-#include <rod/AsContextual.hpp>
-#include <rod/AsSingleton.hpp>
-#include <rod/Contextual.hpp>
+#include <rod/Extend.hpp>
+#include <rod/Find.hpp>
+#include <rod/Resolve.hpp>
+#include <rod/Singleton.hpp>
+#include <rod/match/Annotation.hpp>
 
-#include <QBuffer>
-#include <QDataStream>
 #include <QMetaObject>
+#include <QObject>
 
 #include <heads/Bootstrapper.hpp>
 #include <heads/Inform.hpp>
@@ -20,8 +21,12 @@
 #include <heads/common/MessageDispatcher.hpp>
 #include <heads/common/QueryIdProvider.hpp>
 #include <heads/common/RequestPool.hpp>
+#include <heads/head/BootstrapStage.hpp>
+#include <heads/head/EstablishRootConnectionStage.hpp>
+#include <heads/head/ExecuteStage.hpp>
+#include <heads/head/HeadMessageDispatcher.hpp>
 #include <heads/head/HeadServer.hpp>
-#include <heads/head/RootConnection.hpp>
+#include <heads/head/RegisterStage.hpp>
 
 
 
@@ -30,15 +35,17 @@ namespace heads {
 namespace head
 {
 
-	namespace headDetail
+	namespace detail
 	{
-	
+
 		template< typename Context >
-		struct DefineContextual
+		struct DefineHeadContext
 		{
 		private:
-			using HeadDescriptor = typename Context::template FindRegisteredType<
-										annotation::IsHeadDescriptor >::r::Head::r;
+			using HeadDescriptor = typename rod::Find<
+										Context,
+										rod::match::Annotation< ::heads::annotation::IsHeadDescriptor >
+									>::r::Head::r;
 
 			template< typename MessageControllers >
 			struct Define;
@@ -46,149 +53,77 @@ namespace head
 			template< typename... MessageController >
 			struct Define< MessageControllers< MessageController... > >
 			{
-				using r = rod::Contextual<
-					Context,
-					rod::AsSingleton< common::QueryIdProvider >,
-					rod::AsSingleton< common::RequestPool >,
-					rod::AsSingleton< head::HeadServer >,
-					rod::AsSingleton< head::RootConnection >,
-					MessageController... >;
+				using r = typename rod::Extend< Context >
+							::template With<
+								MessageController...,
+								rod::Singleton< HeadServer >,
+								rod::Singleton< common::Connection > >::r;
 			};
 
 		public:
 			using r = typename Define< typename HeadDescriptor::MessageControllers >::r;
 		};
-	
+		
 	}
 
 
-	template< typename Context >
-	class Head:
-		public headDetail::DefineContextual< Context >::r
+	template< typename HeadsContext >
+	class Head
 	{
 	private:
-		using This = Head< Context >;
+		typename detail::DefineHeadContext< HeadsContext >::r	headContext;
 
-
-		HeadServer&				headServer = ROD_Resolve( HeadServer& );
-		common::Connection&		connection = ROD_Resolve( common::Connection& );
-		common::RequestPool&	requestPool = ROD_Resolve( common::RequestPool& );
+		common::Connection&		connection;
+		HeadServer&				headServer;
+		QApplication&			app;
 
 
 	public:
-		ROD_Contextual_Constructor( Head );
-
-
-		void
-		setRootSocket( common::Socket socket )
-		{
-			rod::resolve< RootConnection& >( this ).setWriteSocket( std::move( socket ) );
-		}
+		Head( HeadsContext& headsContext ):
+		  headContext( headsContext ),
+		  connection( rod::resolve< common::Connection& >( headContext ) ),
+		  headServer( rod::resolve< HeadServer& >( headContext ) ),
+		  app( rod::resolve< QApplication& >( headContext ) )
+		{}
 
 		void
 		enter()
 		{
-			registerToRoot();
-			if( bootstrap() )
+			if( executeStage< EstablishRootConnectionStage >( headContext ) == false )
 			{
-				launchLogic();
+				// TODO silently close the application?
+				return;
+			}
+			executeStage< RegisterStage >( headContext );
+
+			HeadMessageDispatcher< decltype( headContext ) >	headMessageDispatcher( headContext );
+			headMessageDispatcher.start();
+
+			if( executeStage< BootstrapStage, rod::Singleton< Bootstrapper > >( headContext ) )
+			{
+				runLogic();
 			}
 		}
 
 
 	private:
 		void
-		registerToRoot()
+		runLogic()
 		{
-			QEventLoop					eventLoop;
-			QMetaObject::Connection		c;
+			using HeadDescriptor = 	rod::Find<
+										HeadsContext,
+										rod::match::Annotation< annotation::IsHeadDescriptor >
+									>::r::Head::r;
 
-			c = headServer.onRootConnected(
-			[=, &eventLoop] ( common::Socket&& rootReadSocket )
-			{
-				rod::resolve< RootConnection& >( this ).setReadSocket( std::move( rootReadSocket ) );
-					
-				eventLoop.quit();
-			});
+			auto	queryService = common::QueryService< decltype( headContext ) >( headContext );
+			auto	headContextWithQueryService = rod::extend( headContext )
+														.with( queryService )();
+			auto	headLogic = HeadDescriptor::template Logic<
+									decltype( headContextWithQueryService ) >(
+										headContextWithQueryService );
 
-			inform( this, topic( "head/register", headServer.getId() ) );
-
-			eventLoop.exec();
-			QObject::disconnect( c );
-		}
-
-		bool
-		bootstrap()
-		{
-			QEventLoop				eventLoop;
-			Bootstrapper			bootstrapper( eventLoop );
-			auto					dispatcher = common::messageDispatcher( this );
-			QMetaObject::Connection	c = QObject::connect( connection.getReadSocket().get(), &QIODevice::readyRead,
-			[this, &dispatcher] ()
-			{
-				connection.getProtocolReader().readFrom( *connection.getReadSocket() );
-
-				while( connection.getProtocolReader().availableMessages() )
-				{
-					common::Message	m( connection.getProtocolReader().get() );
-
-					if( m.type.isEmpty() )
-					{
-						requestPool.processMessage( std::move( m ) );
-					}
-					else
-					{
-						common::QueryId	id { m.id };
-						dispatcher.dispatch( m.type, std::move( m ), std::move( id ) );
-					}
-				}
-			});
-
-			using	headBootstrapContextual = typename This::template FindRegisteredType<
-													annotation::IsHeadDescriptor >::r::Head::r::Bootstrap;
-			auto	headBootstrap = rod::create< headBootstrapContextual::template Contextual >( this, bootstrapper );
-
-			headBootstrap.bootstrap();
-
-			eventLoop.exec();
-			QObject::disconnect( c );
-
-			return bootstrapper.shouldProceed();
-		}
-
-		void
-		launchLogic()
-		{
-			using	headLogicContextual = typename This::template FindRegisteredType<
-													annotation::IsHeadDescriptor >::r::Head::r::Logic;
-			auto	headLogic = rod::create< headLogicContextual::template Contextual >( this );
-
-			headLogic.build();
-
-			auto					dispatcher = common::messageDispatcher( this );
-			QMetaObject::Connection	c = QObject::connect( connection.getReadSocket().get(), &QIODevice::readyRead,
-			[this, &dispatcher] ()
-			{
-				connection.getProtocolReader().readFrom( *connection.getReadSocket() );
-
-				while( connection.getProtocolReader().availableMessages() )
-				{
-					common::Message	m( connection.getProtocolReader().get() );
-
-					if( m.type.isEmpty() )
-					{
-						requestPool.processMessage( std::move( m ) );
-					}
-					else
-					{
-						common::QueryId	id { m.id };
-						dispatcher.dispatch( m.type, std::move( m ), std::move( id ) );
-					}
-				}
-			});
-
-			rod::resolve< QApplication& >( this ).exec();
-			QObject::disconnect( c );
+			headLogic.prepare();
+			app.exec();
 		}
 	};
 

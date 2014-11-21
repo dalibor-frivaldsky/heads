@@ -7,7 +7,7 @@
 #include <QLocalServer>
 #include <QMetaObject>
 
-#include <rod/annotation/ConstructWith.hpp>
+#include <rod/annotation/Requires.hpp>
 
 #include <heads/common/ServerNaming.hpp>
 #include <heads/common/Socket.hpp>
@@ -32,7 +32,7 @@ namespace root
 
 
 	public:
-		using ConstructWith = rod::annotation::ConstructWith< common::ServerNaming& >;
+		using Requires = rod::annotation::Requires< common::ServerNaming& >;
 		RootServer( common::ServerNaming& serverNaming );
 
 		~RootServer();

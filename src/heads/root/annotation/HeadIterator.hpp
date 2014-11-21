@@ -11,9 +11,9 @@ namespace root {
 namespace annotation
 {
 
-	struct ListenersAccessor
+	struct HeadIterator
 	{};
 
-	ROD_Annotation( ListenersAccessor )
+	ROD_Annotation( HeadIterator )
 	
 }}}

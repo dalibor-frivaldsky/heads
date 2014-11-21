@@ -8,6 +8,8 @@
 
 #include <rod/Generate.hpp>
 
+#include <heads/root/annotation/ReductionPool.hpp>
+
 
 
 
@@ -103,6 +105,8 @@ namespace root
 		private reductionsDetail::SpecificReductions< ReducibleType >...
 	{
 	public:
+		using ReductionPool = root::annotation::ReductionPool;
+		
 		template< typename T >
 		std::function< T&() >
 		prepareReduction( int mapCount, std::function< void( T ) > reductionOp )

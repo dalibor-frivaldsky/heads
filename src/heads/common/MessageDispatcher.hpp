@@ -1,7 +1,15 @@
 #pragma once
 
 
+#include <utility>
+
 #include <rod/Dispatcher.hpp>
+#include <rod/Find.hpp>
+#include <rod/Resolve.hpp>
+#include <rod/Within.hpp>
+#include <rod/match/Annotation.hpp>
+
+#include <rod/factory/Create.hpp>
 
 #include <QString>
 
@@ -15,69 +23,98 @@ namespace heads {
 namespace common
 {
 
-	struct MessageHandle
+	namespace detail
 	{
-		template< typename MessageHandler >
-		static
-		QString
-		handle()
-		{
-			return MessageHandler::endpoint();
-		}
-	};
 
-	struct MessagePerformer
-	{
-		template< typename Controller, typename ContentType >
-		struct CallController;
-
-		template< typename Controller >
-		struct CallController< Controller, void >
+		struct MessageHandle
 		{
+			template< typename MessageHandler >
 			static
-			void
-			call( Controller& controller, Message& )
+			QString
+			handle()
 			{
-				controller();
+				return MessageHandler::endpoint();
 			}
 		};
 
-		template< typename Controller, typename ContentType >
-		struct CallController
+		struct MessagePerformer
 		{
+			template< typename MessageHandler, typename ContentType >
+			struct CallMessageHandler;
+
+			template< typename MessageHandler >
+			struct CallMessageHandler< MessageHandler, void >
+			{
+				template< typename Context >
+				static
+				void
+				call( MessageHandler& handler, Context& context, const Message& )
+				{
+					handler( context );
+				}
+			};
+
+			template< typename MessageHandler, typename ContentType >
+			struct CallMessageHandler
+			{
+				template< typename Context >
+				static
+				void
+				call( MessageHandler& handler, Context& context, const Message& message )
+				{
+					handler( context, message.readContent< ContentType >() );
+				}
+			};
+
+
+			template< typename MessageHandler >
+			struct Perform
+			{
+			private:
+				const Message&	message;
+
+
+			public:
+				Perform( const Message& message ):
+				  message( message )
+				{}
+
+				template< typename Context >
+				void
+				operator () ( Context& context )
+				{
+					auto	handler = rod::factory::create< MessageHandler >( context );
+					using	ContentType = typename MessageHandler::MessageController::Content;
+
+					CallMessageHandler< MessageHandler, ContentType >::call( handler, context, message );
+				}
+			};
+
+
+			template< typename MessageHandler, typename Context, typename... ToInject >
 			static
 			void
-			call( Controller& controller, Message& message )
+			perform( Context& context, const Message& message, ToInject&&... toInject )
 			{
-				controller( message.readContent< ContentType >() );
+				rod::within(
+					context,
+					std::forward< ToInject >( toInject )...,
+				Perform< MessageHandler >( message ) );
 			}
 		};
+		
+	}
 
-
-		template< template< typename > class MessageHandler, typename Context, typename... ToInject >
-		static
-		void
-		perform( Context* context, Message&& message, ToInject&&... toInject )
-		{
-			auto	handler = rod::create< MessageHandler >( context, std::forward< ToInject >( toInject )... );
-			using	contentType = typename decltype( handler )::MessageController::Content;
-
-			CallController< decltype( handler ), contentType >::call( handler, message );
-		}
-	};
 
 	template< typename Context >
-	auto
-	messageDispatcher( Context* context )
-		-> decltype( rod::dispatcher<
-						annotation::IsMessageController,
-						MessageHandle,
-						MessagePerformer >( context ) )
+	struct CreateMessageDispatcher
 	{
-		return rod::dispatcher<
-					annotation::IsMessageController,
-					MessageHandle,
-					MessagePerformer >( context );
-	}
+		using r = rod::Dispatcher<
+					typename rod::Find<
+						Context,
+						rod::match::Annotation< heads::annotation::IsMessageController > >::r,
+					detail::MessageHandle,
+					detail::MessagePerformer >;
+	};
 
 }}

@@ -1,81 +1,65 @@
 #pragma once
 
 
-#include <rod/Contextual.hpp>
+#include <rod/Singleton.hpp>
+#include <rod/Within.hpp>
+#include <rod/evaluable/EvaluableResolver.hpp>
+
 #include <rod/factory/FactoryResolver.hpp>
 
 #include <QCoreApplication>
+#include <QMetaType>
 
+#include <heads/common/Options.hpp>
+#include <heads/common/QueryIdProvider.hpp>
+#include <heads/common/RequestPool.hpp>
 #include <heads/common/ServerNaming.hpp>
-#include <heads/common/Socket.hpp>
 #include <heads/head/Head.hpp>
 #include <heads/root/Root.hpp>
 
 
 
 
-namespace heads {
+namespace heads
+{
+
+	namespace detail
+	{
+
+		struct EnterHeads
+		{
+			template< typename HeadsContext >
+			void
+			operator () ( HeadsContext& headsContext )
+			{
+				if( QCoreApplication::arguments().contains( common::Options::startAsRoot() ) )
+				{
+					root::Root().enter( headsContext );
+				}
+				else
+				{
+					head::Head< HeadsContext >( headsContext ).enter();
+				}
+			}
+		};
+		
+	}
+
 
 	template< typename Context >
-	class Heads:
-		public rod::Contextual<
-				Context,
-				rod::factory::FactoryResolver,
-				rod::AsSingleton< common::ServerNaming > >
+	void
+	enter( Context& context )
 	{
-	public:
-		ROD_Contextual_Constructor( Heads );
+		qRegisterMetaType< QLocalSocket::LocalSocketError >( "LocalSocketError" );
 
-
-		void
-		enter()
-		{
-			if( QCoreApplication::arguments().contains( "-heads:root" ) )
-			{
-				auto r = rod::create< root::Root >( this );
-				r.enter();
-			}
-			else
-			{
-				common::Socket	rootSocket = establishRootConnection();
-
-				if( rootSocket->state() == QLocalSocket::UnconnectedState )
-				{
-					QProcess::startDetached(
-						QCoreApplication::arguments()[ 0 ],
-						QStringList() << "-heads:root" );
-				}
-
-				while( rootSocket->state() != QLocalSocket::ConnectedState )
-				{
-					if( rootSocket->state() == QLocalSocket::UnconnectedState )
-					{
-						rootSocket->connectToServer( rod::resolve< common::ServerNaming& >( this ).rootName(), QIODevice::WriteOnly );
-					}
-					
-					QThread::msleep( 200 );
-				}
-
-				if( rootSocket->state() == QLocalSocket::ConnectedState )
-				{
-					auto head = rod::create< head::Head >( this );
-					head.setRootSocket( std::move( rootSocket ) );
-					head.enter();
-				}
-			}
-		}
-
-
-	private:
-		common::Socket
-		establishRootConnection()
-		{
-			common::Socket	rootSocket( new QLocalSocket() );
-
-			rootSocket->connectToServer( rod::resolve< common::ServerNaming& >( this ).rootName(), QIODevice::WriteOnly );
-
-			return std::move( rootSocket );
-		}
-	};
+		rod::within<
+			rod::factory::FactoryResolver,
+			rod::evaluable::EvaluableResolver,
+			rod::Singleton< common::ServerNaming >,
+			rod::Singleton< common::QueryIdProvider >,	// TODO MSVC2013 issue: QueryIdProvicer
+			rod::Singleton< common::RequestPool > >(	// and RequestPool cannot be in 2 different context hierarchies
+			context,
+		detail::EnterHeads() );
+	}
 
 }

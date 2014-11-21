@@ -3,7 +3,7 @@
 
 #include <functional>
 
-#include <rod/annotation/ConstructWith.hpp>
+#include <rod/annotation/Requires.hpp>
 
 #include <QLocalServer>
 #include <QMetaObject>
@@ -34,7 +34,7 @@ namespace head
 
 
 	public:
-		using ConstructWith = rod::annotation::ConstructWith< common::ServerNaming& >;
+		using Requires = rod::annotation::Requires< common::ServerNaming& >;
 		HeadServer( common::ServerNaming& serverNaming );
 
 		~HeadServer();

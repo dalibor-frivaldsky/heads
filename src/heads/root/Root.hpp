@@ -4,32 +4,14 @@
 #include <map>
 #include <utility>
 
-#include <rod/AsContextual.hpp>
-#include <rod/AsSingleton.hpp>
-#include <rod/Bind.hpp>
-#include <rod/Contextual.hpp>
-#include <rod/Dispatcher.hpp>
-#include <rod/TypeList.hpp>
+#include <rod/Resolve.hpp>
+#include <rod/Singleton.hpp>
+#include <rod/Within.hpp>
 
-#include <QBuffer>
-#include <QDataStream>
-#include <QString>
-
-#include <heads/Reducibles.hpp>
-#include <heads/annotation/RootDescriptor.hpp>
-#include <heads/common/QueryIdProvider.hpp>
-#include <heads/common/RequestPool.hpp>
-#include <heads/common/Socket.hpp>
-#include <heads/root/ConnectionPreRegister.hpp>
-#include <heads/root/ConnectionRegisterer.hpp>
-#include <heads/root/HeadListener.hpp>
+#include <heads/root/HeadConnectionListener.hpp>
+#include <heads/root/ContextualHeadCreator.hpp>
 #include <heads/root/HeadListeners.hpp>
-#include <heads/root/HeadListenersAccessor.hpp>
-#include <heads/root/HeadReduceService.hpp>
-#include <heads/root/Reducible.hpp>
-#include <heads/root/Reductions.hpp>
 #include <heads/root/RootServer.hpp>
-#include <heads/root/annotation/ReducibleDescriptor.hpp>
 
 
 
@@ -38,176 +20,52 @@ namespace heads {
 namespace root
 {
 
-	namespace rootDetail
+	namespace detail
 	{
-		template< typename Root, typename Listeners, typename ReduceService >
-		class HeadConnectionRegisterer:
-			public ConnectionRegisterer
+
+		struct EnterRoot
 		{
-		private:
-			Root*			root;
-			QApplication&	app;
-			Listeners&		listeners;
-			ReduceService&	reduceService;
-
-
-		public:
-			HeadConnectionRegisterer( Root* root, QApplication& app, Listeners& listeners, ReduceService& reduceService ):
-			  root( root ),
-			  app( app ),
-			  listeners( listeners ),
-			  reduceService( reduceService )
-			{}
-
-			virtual
+			template< typename RootContext >
 			void
-			registerConnection( common::HeadId headId, common::Connection connection )
+			operator () ( RootContext& rootContext )
 			{
-				QObject::connect( connection.getReadSocket().get(), &QLocalSocket::disconnected,
-				[this, headId] ()
-				{
-					if( listeners.has( headId ) )
-					{
-						listeners.get( headId ).goDown();
-					}
+				HeadListeners< RootContext >	headListeners( rootContext );
 
-					if( listeners.getNumberOfListening() == 0 )
-					{
-						app.quit();
-					}
-				});
-
-				listeners.add( headId, rod::create< HeadListener >(
-						root,
-						common::HeadId( headId ),
-						std::move( connection ),
-						reduceService,
-						HeadListenersAccessor< Root >( root ) ) );
-				listeners.get( headId ).listen();
+				rod::within(
+					rootContext,
+					ContextualHeadCreator< decltype( headListeners ) >( headListeners ),
+				InitializeServer() );
 			}
 		};
 
-
-		template< typename Reducibles >
-		struct DefineReductions;
-
-		template< typename... Reducible >
-		struct DefineReductions< rod::TypeList< Reducible... > >
+		struct InitializeServer
 		{
-		private:
-			template< typename R >
-			struct GetType
+			template< typename Context >
+			void
+			operator () ( Context& context )
 			{
-				using r = typename R::Type;
-			};
+				HeadConnectionListener< Context >	headConnectionListener( context );
+				headConnectionListener.listen();
 
-
-		public:
-			using r = Reductions< typename GetType< Reducible >::r... >;
+				rod::resolve< RootServer& >( context ).listen();
+				rod::resolve< QApplication& >( context ).exec();
+			}
 		};
-
-
-		template< typename Context >
-		struct DefineContextual
-		{
-		private:
-			using RootDescriptor = typename Context::template FindRegisteredType<
-										::heads::annotation::IsRootDescriptor >::r::Head::r;
-
-			template< typename Reducibles >
-			struct Define;
-
-			template< typename... ReducibleType >
-			struct Define< Reducibles< ReducibleType... > >
-			{
-				using r = rod::Contextual<
-					Context,
-					rod::AsSingleton< RootServer >,
-					rod::AsSingleton< common::QueryIdProvider >,
-					rod::AsSingleton< common::RequestPool >,
-					Reducible< ReducibleType >... >;
-			};
-
-		public:
-			using r = typename Define< typename RootDescriptor::Reducibles >::r;
-		};
+		
 	}
 
-	template< typename Context >
-	class Root:
-		public rootDetail::DefineContextual< Context >::r
+
+	class Root
 	{
-	private:
-		using This = Root< Context >;
-
-
 	public:
-		using Listeners = root::HeadListeners<
-								typename rod::Bind< This, HeadListener >
-												::template Inject<
-													common::HeadId,
-													common::Connection,
-													HeadReduceService< This >&,
-													HeadListenersAccessor< This > >::r
-												::r >;
-		using Reductions = typename rootDetail::DefineReductions<
-										typename This::template FindRegisteredType<
-													annotation::IsReducibleDescriptor >::r >::r;
-
-
-	private:
-		RootServer&		rootServer = ROD_Resolve( RootServer& );
-		Listeners		listeners;
-		Reductions		reductions;
-
-
-	public:
-		ROD_Contextual_Constructor( Root );
-
-		Root( const Root& ) = delete;
-		Root( Root&& ) = delete;
-		Root& operator = ( const Root& ) = delete;
-		Root& operator = ( Root&& ) = delete;
-
-
-		Listeners&
-		getListeners()
-		{
-			return listeners;
-		}
-
-		Reductions&
-		getReductions()
-		{
-			return reductions;
-		}
-
+		template< typename Context >
 		void
-		enter()
+		enter( Context& context )
 		{
-			auto&	app = rod::resolve< QApplication& >( this );
-			auto	headReduceService = HeadReduceService< This >( this );
-			auto	connectionPreRegister = rod::create< ConnectionPreRegister >( this, createHeadRegisterer( app, listeners, headReduceService ) );
-
-			QMetaObject::Connection c = rootServer.onHeadConnected(
-			[this, &connectionPreRegister] ( common::Socket&& headReadSocket )
-			{
-				connectionPreRegister.preRegisterConnection( std::move( headReadSocket ) );
-			});
-
-			rootServer.listen();
-
-			app.exec();
-			QObject::disconnect( c );
-		}
-
-
-	private:
-		template< typename Container, typename ReduceService >
-		rootDetail::HeadConnectionRegisterer< This, Container, ReduceService >
-		createHeadRegisterer( QApplication& app, Container& container, ReduceService& reduceService )
-		{
-			return rootDetail::HeadConnectionRegisterer< This, Container, ReduceService >( this, app, container, reduceService );
+			rod::within<
+				rod::Singleton< RootServer > >(
+				context,
+			detail::EnterRoot() );
 		}
 	};
 

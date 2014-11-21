@@ -6,27 +6,20 @@
 namespace heads
 {
 
-	Bootstrapper::Bootstrapper( QEventLoop& eventLoop ):
-	  eventLoop( eventLoop )
+	Bootstrapper::Bootstrapper( head::StageControl< bool >& stageControl ):
+	  stageControl( stageControl )
 	{}
 
 	void
 	Bootstrapper::proceed()
 	{
-		eventLoop.quit();
-		proceedToLogic = true;
+		stageControl.done( true );
 	}
 
 	void
 	Bootstrapper::quit()
 	{
-		eventLoop.quit();
-	}
-
-	bool
-	Bootstrapper::shouldProceed() const
-	{
-		return proceedToLogic;
+		stageControl.done( false );
 	}
 
 }

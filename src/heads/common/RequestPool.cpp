@@ -10,20 +10,35 @@ namespace heads {
 namespace common
 {
 
-	void
-	RequestPool::add( Request request )
+	RequestPool::RequestPool( QueryIdProvider& queryIdProvider ):
+	  queryIdProvider( queryIdProvider )
+	{}
+
+	QString
+	RequestPool::registerRequest( RequestCallback requestCallback )
 	{
-		requestMap.insert( std::make_pair( request.getId().id, std::move( request ) ) );
+		QString	requestId = queryIdProvider.nextId().id;
+
+		requestMap[ requestId ] = std::move( requestCallback );
+
+		return requestId;
 	}
 
 	void
-	RequestPool::processMessage( Message message )
+	RequestPool::unregisterRequest( const QString& requestId )
 	{
-		requestMapType::iterator it = requestMap.find( message.id );
+		requestMap.erase( requestId );
+	}
 
-		if( it != requestMap.end() )
+	void
+	RequestPool::processMessage( const Message& message )
+	{
+		auto	requestIt = requestMap.find( message.id );
+
+		if( requestIt != requestMap.end() )
 		{
-			it->second.provideRawResponse( std::move( message.content ) );
+			requestIt->second( message );
+			requestMap.erase( requestIt );
 		}
 	}
 

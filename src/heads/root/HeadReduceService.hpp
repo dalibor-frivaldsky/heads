@@ -3,12 +3,18 @@
 
 #include <utility>
 
-#include <rod/Contextual.hpp>
+#include <rod/Find.hpp>
+#include <rod/Resolve.hpp>
+#include <rod/Within.hpp>
+#include <rod/match/Component.hpp>
+#include <rod/match/Annotation.hpp>
 
 #include <heads/common/Connection.hpp>
 #include <heads/common/HeadId.hpp>
 #include <heads/common/QueryId.hpp>
+#include <heads/root/annotation/HeadIterator.hpp>
 #include <heads/root/annotation/ReduceService.hpp>
+#include <heads/root/annotation/ReductionPool.hpp>
 
 
 
@@ -17,89 +23,110 @@ namespace heads {
 namespace root
 {
 
-	namespace headReduceServiceDetail
+	namespace detail
 	{
-	
-		// TODO move to rod
-		template< typename Context >
-		class ContextCaller:
-			public rod::Contextual< Context >
+
+		template< typename ReduceType, typename ReduceOp >
+		struct PerformReduce
 		{
+		private:
+			ReduceType	reduceType;
+
+
 		public:
-			ROD_Contextual_Constructor( ContextCaller );
+			PerformReduce( ReduceType reduceType ):
+			  reduceType( std::move( reduceType ) )
+			{}
 
-			ContextCaller( const ContextCaller< Context >& ) = delete;
-
-
-			template< typename Op, typename... ToForward >
+			template< typename Context >
 			void
-			operator () ( ToForward&&... toForward )
+			operator () ( Context& context )
 			{
-				Op()( this, std::forward< ToForward >( toForward )... );
+				ReduceOp()( context, std::move( reduceType ) );
 			}
 		};
-	
+
+		template< typename MapProviderOp, typename MapOp >
+		struct PerformMap
+		{
+		private:
+			MapProviderOp	mapProviderOp;
+
+
+		public:
+			PerformMap( MapProviderOp mapProviderOp ):
+			  mapProviderOp( std::move( mapProviderOp ) )
+			{}
+
+			template< typename Context >
+			void
+			operator () ( Context& context )
+			{
+				MapOp()( context, std::move( mapProviderOp ) );
+			}
+		};
+		
 	}
 
 
-	template< typename Parent >
+	template< typename Context >
 	class HeadReduceService
 	{
 	private:
-		Parent*		parent;
+		Context&	context;
 
 
 	public:
 		using ReduceService = annotation::ReduceService;
 
 
-		HeadReduceService( Parent* parent ):
-		  parent( parent )
+		HeadReduceService( Context& context ):
+		  context( context )
 		{}
-
-		HeadReduceService( HeadReduceService&& other ):
-		  parent( other.parent )
-		{}
-
 
 		template< typename ReduceType, typename MapOp, typename ReduceOp >
 		void
-		reduce( common::HeadId& callerId, common::Connection& callerConnection, common::QueryId queryId )
+		reduce( common::HeadId& callerId, common::QueryId queryId )
 		{
-			using			Listeners = typename Parent::Listeners;
-			Listeners&		listeners = parent->getListeners();
-			using			Reductions = typename Parent::Reductions;
-			Reductions&		reductions = parent->getReductions();
+			using	HeadIterator =	typename rod::Find<
+										Context,
+										rod::match::Component<
+											rod::match::Annotation< root::annotation::IsHeadIterator >
+										>
+									>::r::Head::r;
+			auto&	headIterator = rod::resolve< HeadIterator& >( context );
 
+			using	ReductionPool =	typename rod::Find<
+										Context,
+										rod::match::Component<
+											rod::match::Annotation< root::annotation::IsReductionPool >
+										>
+									>::r::Head::r;
+			auto&	reductionPool = rod::resolve< ReductionPool& >( context );
+
+
+			// TODO unsafe use of this, get reduction id and unregister all reductions of this service
 			auto	reduceOp = 
-			[this, &callerConnection, queryId] ( ReduceType result )
+			[=] ( ReduceType result )
 			{
-				auto	cc = rod::create< headReduceServiceDetail::ContextCaller >( parent, callerConnection, common::QueryId( queryId ) );
-				cc.operator () < ReduceOp > ( std::move( result ) );
+				common::QueryId	qid( queryId );
+				rod::within(
+					context,
+					qid,
+				detail::PerformReduce< ReduceType, ReduceOp >( std::move( result ) ) );
 			};
-			auto	mapProviderOp = reductions.prepareReduction< ReduceType >( listeners.getNumberOfListening() - 1, reduceOp );
+			auto	mapProviderOp = reductionPool.prepareReduction< ReduceType >(
+										headIterator.getNumberOfListening( callerId ),
+										reduceOp );
 
-			for( auto& listener: listeners.getContainer() )
-			{
-				common::HeadId&	headId = rod::resolve< common::HeadId& >( &listener.second );
+			headIterator.each( 
+				detail::PerformMap<
+					decltype( mapProviderOp ),
+					MapOp
+				>( mapProviderOp ),
+				callerId );
 
-				if( callerId.id != headId.id &&
-					listener.second.getStage() == ListenerStage::Listening )
-				{
-					common::Connection&	headConnection = rod::resolve< common::Connection& >( &listener.second );
-					auto				caller = rod::create< headReduceServiceDetail::ContextCaller >( parent, headConnection );
-
-					caller.operator () < MapOp >( mapProviderOp );
-				}
-			}
-
-			checkReductions();
-		}
-
-		void
-		checkReductions()
-		{
-			parent->getReductions().check();
+			reductionPool.check();
 		}
 	};
 

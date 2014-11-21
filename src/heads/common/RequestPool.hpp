@@ -1,12 +1,15 @@
 #pragma once
 
 
+#include <functional>
 #include <map>
+
+#include <rod/annotation/Requires.hpp>
 
 #include <QString>
 
 #include <heads/common/Message.hpp>
-#include <heads/common/Request.hpp>
+#include <heads/common/QueryIdProvider.hpp>
 
 
 
@@ -18,14 +21,21 @@ namespace common
 	class RequestPool
 	{
 	private:
-		using requestMapType = std::map< QString, Request >;
+		using	RequestCallback = std::function< void( const Message& ) >;
 
-		requestMapType	requestMap;
+		QueryIdProvider&	queryIdProvider;
+
+		std::map< QString, RequestCallback >	requestMap;
 
 
 	public:
-		void	add( Request request );
-		void	processMessage( Message message );
+		using Requires = rod::annotation::Requires< QueryIdProvider& >;
+
+		RequestPool( QueryIdProvider& queryIdProvider );
+
+		QString	registerRequest( RequestCallback requestCallback );
+		void	unregisterRequest( const QString& requestId );
+		void	processMessage( const Message& message );
 	};
 
 }}

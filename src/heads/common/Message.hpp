@@ -51,10 +51,11 @@ namespace common
 
 		template< typename Content >
 		Content
-		readContent()
+		readContent() const
 		{
 			Content		contentObject;
-			QBuffer		contentBuffer( &content );
+			QByteArray	contentCopy( content );
+			QBuffer		contentBuffer( &contentCopy );
 			QDataStream	contentStream( &contentBuffer );
 
 			contentBuffer.open( QIODevice::ReadOnly );
