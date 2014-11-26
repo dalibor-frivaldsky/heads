@@ -110,7 +110,7 @@ namespace head
 		void
 		runLogic()
 		{
-			using HeadDescriptor = 	rod::Find<
+			using HeadDescriptor = 	typename rod::Find<
 										HeadsContext,
 										rod::match::Annotation< annotation::IsHeadDescriptor >
 									>::r::Head::r;
@@ -118,9 +118,10 @@ namespace head
 			auto	queryService = common::QueryService< decltype( headContext ) >( headContext );
 			auto	headContextWithQueryService = rod::extend( headContext )
 														.with( queryService )();
-			auto	headLogic = HeadDescriptor::template Logic<
-									decltype( headContextWithQueryService ) >(
-										headContextWithQueryService );
+            
+            using       HeadLogic = typename HeadDescriptor::template Logic<
+                                        decltype( headContextWithQueryService ) >;
+			HeadLogic   headLogic( headContextWithQueryService );
 
 			headLogic.prepare();
 			app.exec();

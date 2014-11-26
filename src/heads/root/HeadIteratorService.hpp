@@ -2,6 +2,7 @@
 
 
 #include <heads/common/HeadId.hpp>
+#include <heads/root/HeadListener.hpp>
 #include <heads/root/annotation/HeadIterator.hpp>
 
 

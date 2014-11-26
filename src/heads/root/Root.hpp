@@ -22,6 +22,21 @@ namespace root
 
 	namespace detail
 	{
+        
+        struct InitializeServer
+        {
+            template< typename Context >
+            void
+            operator () ( Context& context )
+            {
+                HeadConnectionListener< Context >	headConnectionListener( context );
+                headConnectionListener.listen();
+                
+                rod::resolve< RootServer& >( context ).listen();
+                rod::resolve< QApplication& >( context ).exec();
+            }
+        };
+    
 
 		struct EnterRoot
 		{
@@ -37,21 +52,7 @@ namespace root
 				InitializeServer() );
 			}
 		};
-
-		struct InitializeServer
-		{
-			template< typename Context >
-			void
-			operator () ( Context& context )
-			{
-				HeadConnectionListener< Context >	headConnectionListener( context );
-				headConnectionListener.listen();
-
-				rod::resolve< RootServer& >( context ).listen();
-				rod::resolve< QApplication& >( context ).exec();
-			}
-		};
-		
+	
 	}
 
 

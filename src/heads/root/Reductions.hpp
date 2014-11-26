@@ -70,7 +70,7 @@ namespace root
 			std::function< ReducibleType&() >
 			prepareReduction( int mapCount, std::function< void( ReducibleType ) > reductionOp )
 			{
-				Reductions::iterator		reductionIt = reductions.insert( reductions.begin(), Reduction< ReducibleType >( mapCount, reductionOp ) );
+				typename Reductions::iterator		reductionIt = reductions.insert( reductions.begin(), Reduction< ReducibleType >( mapCount, reductionOp ) );
 
 				return
 				[=] () -> ReducibleType&

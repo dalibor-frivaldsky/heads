@@ -145,15 +145,16 @@ namespace root
 			onMessageReceivedConnection = QObject::connect( &connection, &common::Connection::messageReceived,
 			[this] ( const common::Message& message )
 			{
-				using	ReductionPool =	rod::Find<
+				using	ReductionPool =	typename rod::Find<
 											Context,
 											rod::match::Component<
 												rod::match::Annotation< root::annotation::IsReductionPool >
 											>
 										>::r::Head::r;
 
-				auto	dispatcher = common::CreateMessageDispatcher<
-										decltype( listenerContext ) >::r();
+                using       Dispatcher = typename common::CreateMessageDispatcher<
+                                            decltype( listenerContext ) >::r;
+				Dispatcher  dispatcher;
 				
 				if( message.type.isEmpty() )
 				{

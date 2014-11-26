@@ -150,11 +150,11 @@ namespace root
 			  message( message )
 			{}
 
-			template< typename Context >
+			template< typename Ctx >
 			void
-			operator () ( Context& context )
+			operator () ( Ctx& context )
 			{
-				typename common::CreateMessageDispatcher< Context >::r().dispatch( message.type, context, message );
+				typename common::CreateMessageDispatcher< Ctx >::r().dispatch( message.type, context, message );
 			}
 		};
 

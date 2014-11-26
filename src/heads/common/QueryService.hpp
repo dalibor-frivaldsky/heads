@@ -70,7 +70,7 @@ namespace common
 			QString queryId = requestPool.registerRequest(
 				[=] ( const Message& response )
 				{
-					auto	closureOp = &Closure::operator()< Context >;
+					auto	closureOp = &Closure::template operator()< Context >;
 					closure(
 						context,
 						response.readContent<

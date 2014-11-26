@@ -43,6 +43,8 @@ namespace head {
 			common::Connection& connection,
 			common::ServerNaming& serverNaming,
 			StageControl< bool >& stageControl );
+        
+        EstablishRootConnectionStage( EstablishRootConnectionStage&& other );
 
 		template< typename Context >
 		void

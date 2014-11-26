@@ -28,7 +28,7 @@ namespace head {
 		void
 		execute( Context& context )
 		{
-			using	HeadBootstrap = rod::Find<
+			using	HeadBootstrap = typename rod::Find<
 										Context,
 										rod::match::Annotation< annotation::IsHeadDescriptor >
 									>::r::Head::r::Bootstrap;

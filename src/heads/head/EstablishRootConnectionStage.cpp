@@ -1,6 +1,8 @@
 #include "EstablishRootConnectionStage.hpp"
 
 
+#include <utility>
+
 #include <QProcess>
 #include <QThread>
 
@@ -21,6 +23,14 @@ namespace head {
 	  serverNaming( serverNaming ),
 	  stageControl( stageControl )
 	{}
+    
+    EstablishRootConnectionStage::EstablishRootConnectionStage( EstablishRootConnectionStage&& other ):
+      QObject(),
+      connection( other.connection ),
+      serverNaming( other.serverNaming ),
+      stageControl( other.stageControl ),
+      serverStarted( other.serverStarted )
+    {}
 
 	void
 	EstablishRootConnectionStage::connectToRootServer()

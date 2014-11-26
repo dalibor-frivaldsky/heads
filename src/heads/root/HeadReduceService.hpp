@@ -115,7 +115,7 @@ namespace root
 					qid,
 				detail::PerformReduce< ReduceType, ReduceOp >( std::move( result ) ) );
 			};
-			auto	mapProviderOp = reductionPool.prepareReduction< ReduceType >(
+			auto	mapProviderOp = reductionPool.template prepareReduction< ReduceType >(
 										headIterator.getNumberOfListening( callerId ),
 										reduceOp );
 
