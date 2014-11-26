@@ -70,7 +70,14 @@ namespace common
 			QString queryId = requestPool.registerRequest(
 				[=] ( const Message& response )
 				{
+					// MSVC2013 does not accept template keyword before operator()
+					// clang (properly) requires the template keyword to be present
+					#if defined( _MSC_VER )
+					auto	closureOp = &Closure::operator()< Context >;
+					#else
 					auto	closureOp = &Closure::template operator()< Context >;
+					#endif
+
 					closure(
 						context,
 						response.readContent<
