@@ -99,7 +99,14 @@ namespace head
 			HeadMessageDispatcher< decltype( headContext ) >	headMessageDispatcher( headContext );
 			headMessageDispatcher.start();
 
-			if( executeStage< BootstrapStage, rod::Singleton< Bootstrapper > >( headContext ) )
+			using HeadBoostrap = 	typename rod::Find<
+										HeadsContext,
+										rod::match::Annotation< annotation::IsHeadDescriptor >
+									>::r::Head::r::Bootstrap;
+			if( executeStage<
+					BootstrapStage< HeadBoostrap >,
+					rod::Singleton< Bootstrapper >
+				>( headContext ) )
 			{
 				runLogic();
 			}

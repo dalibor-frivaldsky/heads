@@ -2,6 +2,7 @@
 
 
 #include <rod/With.hpp>
+#include <rod/annotation/Requires.hpp>
 
 #include <heads/Topic.hpp>
 #include <heads/common/Connection.hpp>
@@ -23,5 +24,20 @@ namespace heads
 			connection.sendMessage( message );
 		});
 	}
+
+
+	class Inform
+	{
+	private:
+		common::Connection&	connection;
+
+
+	public:
+		using Requires = rod::annotation::Requires< common::Connection& >;
+
+		Inform( common::Connection& connection );
+
+		void	operator () ( const common::Message& message );
+	};
 
 }

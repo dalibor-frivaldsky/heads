@@ -21,12 +21,6 @@ namespace heads
 		return std::move( m );
 	}
 
-	common::Message
-	topic( QString name )
-	{
-		common::Message m( name, "" );
-
-		return std::move( m );
-	}
+	common::Message	topic( QString name );
 
 }

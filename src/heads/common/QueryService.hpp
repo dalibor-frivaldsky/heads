@@ -25,8 +25,8 @@ namespace common
 		template< typename CallbackOp >
 		struct GetQueryReturn;
 
-		template< typename Class, typename Return, typename Context, typename QueryReturn >
-		struct GetQueryReturn< Return (Class::*)( Context, QueryReturn ) const >
+		template< typename Class, typename Return, typename QueryReturn >
+		struct GetQueryReturn< Return (Class::*)( QueryReturn ) const >
 		{
 			using r = QueryReturn;
 		};
@@ -70,18 +70,10 @@ namespace common
 			QString queryId = requestPool.registerRequest(
 				[=] ( const Message& response )
 				{
-					// MSVC2013 does not accept template keyword before operator()
-					// clang (properly) requires the template keyword to be present
-					#if defined( _MSC_VER )
-					auto	closureOp = &Closure::operator()< Context >;
-					#else
-					auto	closureOp = &Closure::template operator()< Context >;
-					#endif
-
 					closure(
-						context,
 						response.readContent<
-							typename detail::GetQueryReturn< decltype( closureOp ) >::r >() );
+							typename detail::GetQueryReturn<
+								decltype( &Closure::operator() ) >::r >() );
 
 					queries.erase( response.id );
 				});

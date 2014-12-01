@@ -1,6 +1,8 @@
 #pragma once
 
 
+#include <utility>
+
 #include <rod/Resolve.hpp>
 #include <rod/With.hpp>
 #include <rod/annotation/Requires.hpp>
@@ -8,6 +10,7 @@
 #include <QMetaObject>
 #include <QObject>
 
+#include <heads/Inform.hpp>
 #include <heads/common/Connection.hpp>
 #include <heads/head/HeadServer.hpp>
 #include <heads/head/StageControl.hpp>
@@ -24,17 +27,27 @@ namespace head {
 		common::Connection&		connection;
 		HeadServer&				headServer;
 		StageControl< void >&	stageControl;
+		Inform					inform;
 
 		QMetaObject::Connection		onRootConnectedConnection;
 
 
 	public:
-		using Requires = rod::annotation::Requires< common::Connection&, HeadServer&, StageControl< void >& >;
+		using Requires = rod::annotation::Requires<
+							common::Connection&,
+							HeadServer&,
+							StageControl< void >&,
+							Inform >;
 
-		RegisterStage( common::Connection& connection, HeadServer& headServer, StageControl< void >& stageControl ):
+		RegisterStage(
+			common::Connection& connection,
+			HeadServer& headServer,
+			StageControl< void >& stageControl,
+			Inform inform ):
 		  connection( connection ),
 		  headServer( headServer ),
-		  stageControl( stageControl )
+		  stageControl( stageControl ),
+		  inform( std::move( inform ) )
 		{}
 
 		~RegisterStage()
@@ -44,7 +57,7 @@ namespace head {
 
 		template< typename Context >
 		void
-		execute( Context& context )
+		execute( Context& )
 		{
 			onRootConnectedConnection = headServer.onRootConnected(
 			[this] ( common::Socket rootReadSocket )
@@ -52,7 +65,7 @@ namespace head {
 				connection.setReadSocket( std::move( rootReadSocket ) );
 				stageControl.done();
 			});
-			inform( context, topic( "head/register", headServer.getId() ) );
+			inform( topic( "head/register", headServer.getId() ) );
 		}
 	};
 	

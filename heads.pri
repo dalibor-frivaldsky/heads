@@ -1,6 +1,9 @@
 INCLUDEPATH += $$PWD/src
 
 SOURCES += $$PWD/src/heads/Bootstrapper.cpp \
+	$$PWD/src/heads/Inform.cpp \
+	$$PWD/src/heads/Query.cpp \
+	$$PWD/src/heads/Topic.cpp \
 	$$PWD/src/heads/common/Connection.cpp \
 	$$PWD/src/heads/common/HeadId.cpp \
 	$$PWD/src/heads/common/Message.cpp \

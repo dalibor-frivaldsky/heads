@@ -10,6 +10,7 @@
 #include <QCoreApplication>
 #include <QMetaType>
 
+#include <heads/HeadsResolver.hpp>
 #include <heads/common/Options.hpp>
 #include <heads/common/QueryIdProvider.hpp>
 #include <heads/common/RequestPool.hpp>
@@ -55,6 +56,7 @@ namespace heads
 		rod::within<
 			rod::factory::FactoryResolver,
 			rod::evaluable::EvaluableResolver,
+			HeadsResolver,
 			rod::Singleton< common::ServerNaming >,
 			rod::Singleton< common::QueryIdProvider >,	// TODO MSVC2013 issue: QueryIdProvicer
 			rod::Singleton< common::RequestPool > >(	// and RequestPool cannot be in 2 different context hierarchies
