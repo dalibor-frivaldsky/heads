@@ -65,12 +65,14 @@ namespace common
 
 		template< typename Closure >
 		void
-		query( Message& message, Closure&& closure )
+		query( Message&& message, Closure&& closure )
 		{
+			auto	cl = closure;
+
 			QString queryId = requestPool.registerRequest(
 				[=] ( const Message& response )
 				{
-					closure(
+					cl(
 						response.readContent<
 							typename detail::GetQueryReturn<
 								decltype( &Closure::operator() ) >::r >() );

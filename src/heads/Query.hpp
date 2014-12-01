@@ -38,7 +38,7 @@ namespace heads
 								>::r::Head::r;
 		auto& queryProvider = rod::resolve< QueryProvider& >( context );
 
-		queryProvider.query( message, std::move( closure ) );
+		queryProvider.query( std::move( message ), std::move( closure ) );
 	}
 
 
@@ -79,12 +79,14 @@ namespace heads
 
 		template< typename Closure >
 		void
-		operator () ( common::Message& message, Closure&& closure )
+		operator () ( common::Message&& message, Closure&& closure )
 		{
+			auto	cl = closure;
+
 			QString queryId = requestPool.registerRequest(
 			[=] ( const common::Message& response )
 			{
-				closure(
+				cl(
 					response.readContent<
 						typename detail::GetQueryReturn<
 							decltype( &Closure::operator() ) >::r >() );
