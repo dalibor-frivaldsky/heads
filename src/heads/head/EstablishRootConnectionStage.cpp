@@ -41,14 +41,14 @@ namespace head {
 	void
 	EstablishRootConnectionStage::connectToRootServer()
 	{
-		log( Debug ) << "Establishing write connection to root";
+		log.debug( "Establishing write connection to root" );
 		connection.getWriteSocket()->connectToServer( serverNaming.rootName(), QIODevice::WriteOnly );
 	}
 
 	void
 	EstablishRootConnectionStage::onConnected()
 	{
-		log( Info ) << "Write connection to root established";
+		log.info( "Write connection to root established" );
 		stageControl.done( true );
 	}
 
@@ -58,10 +58,12 @@ namespace head {
 		switch( socketError )
 		{
 			case QLocalSocket::ServerNotFoundError:
-				log( Debug ) << "Root not found";
+				log.debug( "Root not found" );
+
 				if( serverStarted == false )
 				{
-					log( Debug ) << "Creating root process";
+					log.debug( "Creating root process" );
+
 					QProcess::startDetached(
 						QCoreApplication::arguments()[ 0 ],
 						QStringList() << common::Options::startAsRoot() );
@@ -76,7 +78,8 @@ namespace head {
 
 			default:
 				// TODO some general error handling
-				log( Fatal ) << "Write connection to root could not be established";
+				log.fatal( "Write connection to root could not be established" );
+
 				stageControl.done( false );
 				break;
 		}
