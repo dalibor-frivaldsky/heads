@@ -58,7 +58,6 @@ namespace head {
 		execute( Context& )
 		{
 			connection.setWriteSocket( common::Socket( new QLocalSocket() ) );
-			connection.getWriteSocket()->setServerName( serverNaming.rootName() );
 
 			QObject::connect(
 				connection.getWriteSocket().get(),

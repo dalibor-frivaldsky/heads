@@ -42,7 +42,7 @@ namespace head {
 	EstablishRootConnectionStage::connectToRootServer()
 	{
 		log( Debug ) << "Establishing write connection to root";
-		connection.getWriteSocket()->connectToServer( QIODevice::WriteOnly );
+		connection.getWriteSocket()->connectToServer( serverNaming.rootName(), QIODevice::WriteOnly );
 	}
 
 	void
