@@ -6,6 +6,8 @@
 
 #include <rod/factory/Create.hpp>
 
+#include <rod/log/Logger.hpp>
+
 #include <QObject>
 
 #include <heads/common/Connection.hpp>
@@ -26,20 +28,25 @@ namespace head {
 
 
 	private:
-		common::Connection&		connection;
-		common::ServerNaming&	serverNaming;
-		StageControl< bool >&	stageControl;
+		using This = EstablishRootConnectionStage;
+
+		rod::log::Logger< This >	log;
+		common::Connection&			connection;
+		common::ServerNaming&		serverNaming;
+		StageControl< bool >&		stageControl;
 
 		bool	serverStarted = false;
 
 
 	public:
 		using Requires = rod::annotation::Requires<
+							rod::log::Logger< This >,
 							common::Connection&,
 							common::ServerNaming&,
 							StageControl< bool >& >;
 
 		EstablishRootConnectionStage(
+			rod::log::Logger< This > log,
 			common::Connection& connection,
 			common::ServerNaming& serverNaming,
 			StageControl< bool >& stageControl );

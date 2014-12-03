@@ -7,6 +7,8 @@
 
 #include <rod/factory/FactoryResolver.hpp>
 
+#include <rod/log/LoggerResolver.hpp>
+
 #include <QCoreApplication>
 #include <QMetaType>
 
@@ -56,6 +58,7 @@ namespace heads
 		rod::within<
 			rod::factory::FactoryResolver,
 			rod::evaluable::EvaluableResolver,
+			rod::log::LoggerResolver,
 			HeadsResolver,
 			rod::Singleton< common::ServerNaming >,
 			rod::Singleton< common::QueryIdProvider >,	// TODO MSVC2013 issue: QueryIdProvicer
